@@ -50,13 +50,15 @@ if(!dir.exists(filename)){
   dir.create(filename)
 }
 
+file_setting = as.integer(inputs[6])
+file_pre = paste0('_setting', file_setting)
 
-file_pre = '_setting1'
-file_pre = '_setting2' ## expand tuning parameter search space
-file_pre = '_setting3' ## a different set of Phi values, try to make data more correlated
-# file_pre = '_setting4' ## further increase the serial correlation: currently the LASSO method still performs well
-file_pre = '_setting5' ## add more subject variability based on setting 4
-file_pre = '_setting6' ## add even more subject variability based on setting 4
+# file_pre = '_setting3' ## use setting4 a.seq, but cv.iter=1
+# file_pre = '_setting4' ## setting7 + cv.iter=12 + even longer a.seq
+# file_pre = '_setting5' ## setting7 + cv.iter=10 + longer a.seq
+# file_pre = '_setting6' ## setting7+cv.iter=6
+# file_pre = '_setting7' ## Ali's suggestion: make the second lag more sparse; second lag diagonal all zero
+
 
 # if(file.exists(paste0(filename, '/', file_pre, '_iter', ITER, '_row_', infer_row, '.RData'))){
 #   stop('done')
@@ -64,102 +66,13 @@ file_pre = '_setting6' ## add even more subject variability based on setting 4
 
 #---------------
 
-## setting1: simple diagonal noise cov (value=0.5), and sparse diagonal random effect cov; set (1,1) of Phi being random
-if(file_pre=='_setting1'){
-  
-  
-  ## set Sig_e cov value
-  set.seed(3)
-  sig.e=0.5
-  Sig_e = generate_cov_matrix(type = 'diag', para = rep(sig.e, p)) ## diag setting, constant noise component
-  
-  ## set transition matrix population-level true values (sparse)
-  set.seed(5)
-  Phi_sparse_p = 0.85
-  Phi_mag = 0.15
-  Phi_list = lapply(1:K, function(w){
-    tmp = (matrix(runif(p*p), p, p)>Phi_sparse_p)* matrix(rnorm(p*p, mean=0, sd = Phi_mag), p, p)
-    diag(tmp) <- runif(p, min=0.1, max=0.4)
-    tmp*0.8^(w-1)
-  }
-  )
-  
-  companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
-  
-  
-  
-  while(max(abs(eigen(companion_Phi)$value))>=1){
-    print('generated population Phi not stationary, processing...')
-    for(w in 1:K){Phi_list[[w]] = Phi_list[[w]]/2}
-    companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
-  }
-  
-  
-  ## set random coefficient position (whether a transition coefficient is random is pre-set)
-  set.seed(13)
-  B_sparse_p = 0.9
-  B_pos_list = replicate(K, {(matrix(runif(p*p), p, p)>B_sparse_p)*1}, simplify = F)
-  ## random coefficient variances (fix the variance for each coefficient across subjects)
-  B_sd_list = lapply(1:K, function(w) matrix(runif(p*p, min=0.05, max=0.12), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
-  
-  B_sd_list[[1]][1,1] <- 0.1 ## manually set this (1,1) entry to be varying with sd=0.1
-  B_pos_list[[1]][1,1] <- 1
-  
-  B_sd_companion = rbind(do.call(cbind, B_sd_list), matrix(0, nrow=p*(K-1), ncol=p*K))
-  B_pos_companion = B_sd_companion>0
-  
-}
 
-## setting2: set cv.max.iter = 5
-if(file_pre=='_setting2'){
-  
-  cv.max.iter = 5
-  ## set Sig_e cov value
-  set.seed(3)
-  sig.e=0.5
-  Sig_e = generate_cov_matrix(type = 'diag', para = rep(sig.e, p)) ## diag setting, constant noise component
-  
-  ## set transition matrix population-level true values (sparse)
-  set.seed(5)
-  Phi_sparse_p = 0.85
-  Phi_mag = 0.15
-  Phi_list = lapply(1:K, function(w){
-    tmp = (matrix(runif(p*p), p, p)>Phi_sparse_p)* matrix(rnorm(p*p, mean=0, sd = Phi_mag), p, p)
-    diag(tmp) <- runif(p, min=0.1, max=0.4)
-    tmp*0.8^(w-1)
-  }
-  )
-  
-  companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
-  
-  
-  
-  while(max(abs(eigen(companion_Phi)$value))>=1){
-    print('generated population Phi not stationary, processing...')
-    for(w in 1:K){Phi_list[[w]] = Phi_list[[w]]/2}
-    companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
-  }
-  
-  
-  ## set random coefficient position (whether a transition coefficient is random is pre-set)
-  set.seed(13)
-  B_sparse_p = 0.9
-  B_pos_list = replicate(K, {(matrix(runif(p*p), p, p)>B_sparse_p)*1}, simplify = F)
-  ## random coefficient variances (fix the variance for each coefficient across subjects)
-  B_sd_list = lapply(1:K, function(w) matrix(runif(p*p, min=0.05, max=0.12), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
-  
-  B_sd_list[[1]][1,1] <- 0.1 ## manually set this (1,1) entry to be varying with sd=0.1
-  B_pos_list[[1]][1,1] <- 1
-  
-  B_sd_companion = rbind(do.call(cbind, B_sd_list), matrix(0, nrow=p*(K-1), ncol=p*K))
-  B_pos_companion = B_sd_companion>0
-  
-}
-
-## setting3: cv.max.iter=5, generate a different set of Phi
+## setting3: 
 if(file_pre=='_setting3'){
   
-  cv.max.iter = 5
+  cv.max.iter = 1
+  a.seq=round(exp((seq(log(1e-7), log(1e4), length.out=8))),40)
+  
   ## set Sig_e cov value
   set.seed(3)
   sig.e=0.5
@@ -167,14 +80,20 @@ if(file_pre=='_setting3'){
   
   ## set transition matrix population-level true values (sparse)
   set.seed(5)
-  Phi_sparse_p = 0.8
-  Phi_mag = 0.2
+  Phi_sparse_p = c(0.8, 0.9, 0.95)
+  Phi_mag = c(0.25, 0.15, 0.1)
+  diag_max=c(0.8, 0.4, 0.2)
+  
   Phi_list = lapply(1:K, function(w){
-    tmp = (matrix(runif(p*p), p, p)>Phi_sparse_p)* matrix(rnorm(p*p, mean=0, sd = Phi_mag), p, p)
-    diag(tmp) <- runif(p, min=0.1, max=0.4)
-    tmp*0.8^(w-1)
+    tmp = (matrix(runif(p*p), p, p)>Phi_sparse_p[w])* matrix(rnorm(p*p, mean=0, sd = Phi_mag[w]), p, p)
+    diag(tmp) <- runif(p, min=0.1, max=diag_max[w])
+    tmp
   }
   )
+  
+  ## make second lag diagonal all zero
+  
+  diag(Phi_list[[2]]) <- 0
   
   companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
   
@@ -189,10 +108,13 @@ if(file_pre=='_setting3'){
   
   ## set random coefficient position (whether a transition coefficient is random is pre-set)
   set.seed(13)
-  B_sparse_p = 0.8
-  B_pos_list = replicate(K, {(matrix(runif(p*p), p, p)>B_sparse_p)*1}, simplify = F)
+  B_sparse_p = c(0.7, 0.8, 0.95)
+  B_pos_list = lapply(1:K, function(w){
+    (matrix(runif(p*p), p, p)>B_sparse_p[w])*1})
   ## random coefficient variances (fix the variance for each coefficient across subjects)
-  B_sd_list = lapply(1:K, function(w) matrix(runif(p*p, min=0.05, max=0.12), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
+  B_sd_max = c(0.18, 0.08, 0.05)
+  B_sd_list = lapply(1:K, function(w) 
+    matrix(runif(p*p, min=0.02, max=B_sd_max[w]), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
   
   B_sd_list[[1]][1,1] <- 0.1 ## manually set this (1,1) entry to be varying with sd=0.1
   B_pos_list[[1]][1,1] <- 1
@@ -202,11 +124,11 @@ if(file_pre=='_setting3'){
   
 }
 
-## setting4: cv.max.iter=5, generate a different set of Phi; and use a possibly smaller a
+## setting4: 
 if(file_pre=='_setting4'){
   
-  cv.max.iter = 5
-  a.seq=round(exp((seq(log(1e-5), log(100), length.out=8))),10)
+  cv.max.iter = 12
+  a.seq=round(exp((seq(log(1e-7), log(1e4), length.out=8))),40)
   
   ## set Sig_e cov value
   set.seed(3)
@@ -226,6 +148,10 @@ if(file_pre=='_setting4'){
   }
   )
   
+  ## make second lag diagonal all zero
+  
+  diag(Phi_list[[2]]) <- 0
+  
   companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
   
   
@@ -239,11 +165,11 @@ if(file_pre=='_setting4'){
   
   ## set random coefficient position (whether a transition coefficient is random is pre-set)
   set.seed(13)
-  B_sparse_p = c(0.85, 0.9, 0.95)
+  B_sparse_p = c(0.7, 0.8, 0.95)
   B_pos_list = lapply(1:K, function(w){
     (matrix(runif(p*p), p, p)>B_sparse_p[w])*1})
   ## random coefficient variances (fix the variance for each coefficient across subjects)
-  B_sd_max = c(0.10, 0.1, 0.05)
+  B_sd_max = c(0.18, 0.08, 0.05)
   B_sd_list = lapply(1:K, function(w) 
     matrix(runif(p*p, min=0.02, max=B_sd_max[w]), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
   
@@ -255,11 +181,11 @@ if(file_pre=='_setting4'){
   
 }
 
-## setting=5: setting4+larger variability
+## setting=5: 
 if(file_pre=='_setting5'){
   
-  cv.max.iter = 5
-  # a.seq=round(exp((seq(log(1e-5), log(100), length.out=8))),10)
+  cv.max.iter = 10
+  a.seq=round(exp((seq(log(1e-5), log(1e3), length.out=8))),25)
   
   ## set Sig_e cov value
   set.seed(3)
@@ -279,6 +205,10 @@ if(file_pre=='_setting5'){
   }
   )
   
+  ## make second lag diagonal all zero
+  
+  diag(Phi_list[[2]]) <- 0
+  
   companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
   
   
@@ -292,11 +222,11 @@ if(file_pre=='_setting5'){
   
   ## set random coefficient position (whether a transition coefficient is random is pre-set)
   set.seed(13)
-  B_sparse_p = c(0.6, 0.8, 0.95)
+  B_sparse_p = c(0.7, 0.8, 0.95)
   B_pos_list = lapply(1:K, function(w){
     (matrix(runif(p*p), p, p)>B_sparse_p[w])*1})
   ## random coefficient variances (fix the variance for each coefficient across subjects)
-  B_sd_max = c(0.1, 0.1, 0.05)
+  B_sd_max = c(0.18, 0.08, 0.05)
   B_sd_list = lapply(1:K, function(w) 
     matrix(runif(p*p, min=0.02, max=B_sd_max[w]), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
   
@@ -308,10 +238,10 @@ if(file_pre=='_setting5'){
   
 }
 
-## setting=6: setting4+even larger variability
+## setting=6: 
 if(file_pre=='_setting6'){
   
-  cv.max.iter = 5
+  cv.max.iter =6
   # a.seq=round(exp((seq(log(1e-5), log(100), length.out=8))),10)
   
   ## set Sig_e cov value
@@ -332,6 +262,10 @@ if(file_pre=='_setting6'){
   }
   )
   
+  ## make second lag diagonal all zero
+  
+  diag(Phi_list[[2]]) <- 0
+  
   companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
   
   
@@ -345,7 +279,65 @@ if(file_pre=='_setting6'){
   
   ## set random coefficient position (whether a transition coefficient is random is pre-set)
   set.seed(13)
-  B_sparse_p = c(0.8, 0.8, 0.95)
+  B_sparse_p = c(0.7, 0.8, 0.95)
+  B_pos_list = lapply(1:K, function(w){
+    (matrix(runif(p*p), p, p)>B_sparse_p[w])*1})
+  ## random coefficient variances (fix the variance for each coefficient across subjects)
+  B_sd_max = c(0.18, 0.08, 0.05)
+  B_sd_list = lapply(1:K, function(w) 
+    matrix(runif(p*p, min=0.02, max=B_sd_max[w]), p, p) * B_pos_list[[w]]) ## this is the sd of the random effects; indicate sparse diagonal random effect cov
+  
+  B_sd_list[[1]][1,1] <- 0.1 ## manually set this (1,1) entry to be varying with sd=0.1
+  B_pos_list[[1]][1,1] <- 1
+  
+  B_sd_companion = rbind(do.call(cbind, B_sd_list), matrix(0, nrow=p*(K-1), ncol=p*K))
+  B_pos_companion = B_sd_companion>0
+  
+}
+
+
+## setting=7: 
+if(file_pre=='_setting7'){
+  
+  cv.max.iter = 2
+  # a.seq=round(exp((seq(log(1e-5), log(100), length.out=8))),10)
+  
+  ## set Sig_e cov value
+  set.seed(3)
+  sig.e=0.5
+  Sig_e = generate_cov_matrix(type = 'diag', para = rep(sig.e, p)) ## diag setting, constant noise component
+  
+  ## set transition matrix population-level true values (sparse)
+  set.seed(5)
+  Phi_sparse_p = c(0.8, 0.9, 0.95)
+  Phi_mag = c(0.25, 0.15, 0.1)
+  diag_max=c(0.8, 0.4, 0.2)
+  
+  Phi_list = lapply(1:K, function(w){
+    tmp = (matrix(runif(p*p), p, p)>Phi_sparse_p[w])* matrix(rnorm(p*p, mean=0, sd = Phi_mag[w]), p, p)
+    diag(tmp) <- runif(p, min=0.1, max=diag_max[w])
+    tmp
+  }
+  )
+  
+  ## make second lag diagonal all zero
+  
+  diag(Phi_list[[2]]) <- 0
+  
+  companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
+  
+  
+  
+  while(max(abs(eigen(companion_Phi)$value))>=1){
+    print('generated population Phi not stationary, processing...')
+    for(w in 1:K){Phi_list[[w]] = Phi_list[[w]]/2}
+    companion_Phi = VarptoVar1MC(do.call(cbind, Phi_list), p=length(Phi_list), k=dim(Phi_list[[1]])[1])
+  }
+  
+  
+  ## set random coefficient position (whether a transition coefficient is random is pre-set)
+  set.seed(13)
+  B_sparse_p = c(0.7, 0.8, 0.95)
   B_pos_list = lapply(1:K, function(w){
     (matrix(runif(p*p), p, p)>B_sparse_p[w])*1})
   ## random coefficient variances (fix the variance for each coefficient across subjects)
@@ -399,7 +391,10 @@ for (i in 1:n){
   counter=0
   while(max(abs(eigen(B_i + companion_Phi)$value))>=1 & counter < 10){
     counter = counter +1
-    B_i = matrix(rnorm(n=p*p, mean=0, sd = as.vector(B_sd_companion)), p*K, p*K) * B_pos_companion
+    B_i = matrix(
+      rnorm(n=(dim(B_sd_companion)[1])^2, mean=0, sd = as.vector(B_sd_companion)), 
+      p*K, p*K) 
+    * B_pos_companion
   }
   
   if(counter > 1){
@@ -411,7 +406,8 @@ for (i in 1:n){
   
   
   ## simulate for a single subject
-  Yi = MultVarSim(k=p, A1=companion_Phi, p=K, Sigma=Sig_e, T = Time)
+  Yi = MultVarSim(k=p, A1= companion_Phi + B_i, 
+                  p=K, Sigma=Sig_e, T = Time)
   
   
   all_subj_data[[i]] = Yi
@@ -420,9 +416,13 @@ for (i in 1:n){
 ## want some higher serial correlation in the data
 par(mfrow=c(3, 3))
 for (w in 1:9){
-  acf(all_subj_data[[2]][,w])
+  acf(all_subj_data[[2]][,w], main=w)
 }
 
+par(mfrow=c(3, 3))
+for (w in 1:9){
+  pacf(all_subj_data[[2]][,w], main=w)
+}
 
 ##################
 ## prepare input for VAR(K) model
